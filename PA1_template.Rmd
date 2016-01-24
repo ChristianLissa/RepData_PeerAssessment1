@@ -1,25 +1,180 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
+title: "Report Activity observations"
+author: "Christian Lissa"
+date: "24. Januar 2016"
+output: html_document
 ---
 
+# Introduction
 
-## Loading and preprocessing the data
+This document represents my results for the first course project of the coursera track "Reproducile Research". The structure of this document follows the questions, which are asked in the document: https://www.coursera.org/learn/reproducible-research/peer/gYyPt/course-project-1
+
+The data set for this report can also be found in the above mentioned URL.
+
+### Loading and preprocessing the data
+
+The outcome of this chapter will by a tidy data frame "act_base", which will be used for all further processing.
+.
+#### Load libraries
+
+Since I use R3.2.2 I will supress the warnings for libraries compiled with R3.2.3.
+
+```{r}
+options(warn=-1)
+library(data.table)
+library(ggplot2)
+library(knitr)
+```
+
+#### Load the data (i.e. read.csv()).
+
+```{r}
+setwd("~/Coursera/ReproducableResearch/week1")
+act_raw <- read.csv("activity.csv", stringsAsFactors=FALSE)
+```
+
+#### Process/transform the data (if necessary) into a format suitable for your analysis.
+
+Examine the data.
+
+``` {r}
+# Examine raw data
+str(act_raw)
+```
+
+Cleanup the data for the following reasons:
+
+- Variable steps contains NA values (will be ignored at the moment, using rm.na)
+- Variable date has data type character -> date
+- Variable interval has data type int -> factor
+
+```{r}
+act_raw$date <- as.Date(act_raw$date, format = "%Y-%m-%d")
+act_raw$interval <- as.factor(act_raw$interval)
+act_base <- act_raw
+```
+
+Check the result.
+
+```{r}
+# Examine raw data
+str(act_base)
+```
+
+### What is mean total number of steps taken per day?
+
+#### Calculate the total number of steps taken per day.
+
+```{r}
+steps_sum <- aggregate(steps ~ date, act_base, sum)
+colnames(steps_sum) <- c("date","steps")
+str(steps_sum)
+```
+
+#### Make a histogram of the total number of steps taken each day.
+
+```{r}
+ggplot(steps_sum, aes(x = steps)) + 
+  geom_histogram(fill = "red", binwidth = 1000) + 
+  labs(title="Histogram of steps per day", 
+       x = "# steps per day", y = "# times in a day") 
+```
+
+#### Calculate and report the mean and median of the total number of steps taken per day.
+
+```{r}
+steps_mean <- mean(steps_sum$steps, na.rm=TRUE)
+print(steps_mean)
+
+steps_median <- median(steps_sum$steps, na.rm=TRUE)
+print(steps_median)
+```
+
+### What is the average daily activity pattern?
+
+#### Make a time series plot of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all days (y-axis).
+
+```{r}
+steps_interval <- aggregate(act_base$steps, by = list(interval = act_base$interval), FUN=mean, na.rm=TRUE)
+# Convert column variable interval from factor to integer for plotting in ggplot
+steps_interval$interval <- as.integer(levels(steps_interval$interval)[steps_interval$interval])
+colnames(steps_interval) <- c("interval", "steps")
+
+ggplot(steps_interval, aes(x=interval, y=steps)) +   
+  geom_line(color="red", size=1) +  
+  labs(title="Average number of steps", x="Interval", y="# of steps")
+```
+
+#### Which 5-minute interval, on average across all the days in the dataset, contains the maximum number of steps?
+
+```{r}
+steps_interval_max <- steps_interval[which.max(steps_interval$steps),]
+print(steps_interval_max)
+```
 
 
+### Imputing missing values
 
-## What is mean total number of steps taken per day?
+Calculate and report the total number of missing values in the dataset (i.e. the total number of rows with NAs)
 
+```{r}
+act_impute <- act_base
+idx_na <- is.na(act_impute$steps)
+act_impute_mean <- aggregate(act_impute$steps, by = list(interval = act_impute$interval), FUN=mean, na.rm=TRUE)
+colnames(act_impute_mean) <- c("interval", "steps") 
+act_impute$steps[idx_na] <- act_impute_mean$steps[idx_na]
+```
 
+Counting NA steps
+ ```{r}
+sum(is.na(act_impute$steps))
+```
 
-## What is the average daily activity pattern?
+#### Make a histogram of the total number of steps taken each day and Calculate and report the mean and median total number of steps taken per day. 
 
+```{r}
+steps_impute_sum <- aggregate(steps ~ date, act_impute, sum)
+colnames(steps_impute_sum) <- c("date","steps")
+str(steps_impute_sum)
 
+ggplot(steps_impute_sum, aes(x = steps)) + 
+  geom_histogram(fill = "red", binwidth = 1000) + 
+  labs(title="Histogram of steps per day", 
+       x = "# steps per day", y = "# times in a day")  
+```
 
-## Imputing missing values
+#### Do these values differ from the estimates from the first part of the assignment?
 
+Values differ, as shown below:
 
+```{r}
+steps_impute_mean <- mean(steps_impute_sum$steps, na.rm=TRUE)
+print(steps_impute_mean)
 
-## Are there differences in activity patterns between weekdays and weekends?
+steps_impute_median <- median(steps_impute_sum$steps, na.rm=TRUE)
+print(steps_impute_median)
+```
+
+### Are there differences in activity patterns between weekdays and weekends?
+
+#### Create a new factor variable in the dataset with two levels - "weekday" and "weekend" indicating whether a given date is a weekday or weekend day.
+
+```{r}
+is_weekday <- function(d) {
+  wd <- weekdays(d)
+  ifelse (wd == "Samstag" | wd == "Sontag", "weekend", "weekday")
+}
+wx <- sapply(act_impute$date, is_weekday)
+act_impute$wk <- as.factor(wx)
+str(act_impute)
+```
+
+#### Make a panel plot containing a time series plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all weekday days or weekend days (y-axis).
+
+```{r}
+ggplot(act_impute, aes(x=interval, y=steps)) + 
+  geom_line(color="red") + 
+  facet_wrap(~ wk, nrow=2, ncol=1) +
+  labs(x="Interval", y="# of steps") 
+```
+
