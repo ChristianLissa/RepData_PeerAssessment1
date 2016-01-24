@@ -178,3 +178,8 @@ ggplot(act_impute, aes(x=interval, y=steps)) +
   labs(x="Interval", y="# of steps") 
 ```
 
+#### Generate Output
+```
+# knit2html(input="PA1_template.Rmd", output="PA1_template.html") 
+# rmarkdown::render(input="PA1_template.Rmd", output_file="PA1_template.html")
+```
